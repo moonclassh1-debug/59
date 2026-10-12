@@ -44,6 +44,11 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family
 /* in-game pause */
 #pauseBtn{position:absolute;width:42px;height:42px;margin:-21px 0 0 -21px;border-radius:50%;border:1px solid rgba(255,255,255,.16);background:rgba(14,18,34,.55);box-shadow:inset 0 1px 0 rgba(255,255,255,.14),0 6px 18px rgba(0,0,0,.45);display:grid;place-items:center;padding:0;cursor:pointer;z-index:4;color:var(--ink)}
 #pauseBtn svg{width:16px;height:16px}
+#clockEl{position:absolute;height:34px;min-width:64px;margin:-17px 0 0 0;padding:0 12px;border-radius:999px;border:1px solid rgba(255,255,255,.16);background:rgba(14,18,34,.55);box-shadow:inset 0 1px 0 rgba(255,255,255,.14),0 6px 18px rgba(0,0,0,.45);display:grid;place-items:center;z-index:4;color:var(--ink);font-family:var(--display);font-weight:700;font-size:14px;letter-spacing:.06em;font-variant-numeric:tabular-nums;pointer-events:none}
+#clockEl[hidden]{display:none}
+#clockEl.low{color:#ff5470;border-color:rgba(255,84,112,.55);animation:clk 1s ease-in-out infinite}
+#clockEl.ot{color:#ffd166;border-color:rgba(255,209,102,.5)}
+@keyframes clk{50%{box-shadow:0 0 0 4px rgba(255,84,112,.18),0 6px 18px rgba(0,0,0,.45)}}
 #pauseBtn:focus-visible{outline:2px solid var(--violet);outline-offset:3px}
 
 /* screens */
@@ -119,7 +124,7 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family
 .wr{display:flex;align-items:center;gap:8px;width:100%;font-family:var(--display);font-size:10.5px;color:var(--dim);font-variant-numeric:tabular-nums}
 .wr .bar{flex:1;height:4px;border-radius:2px;background:rgba(255,255,255,.08);overflow:hidden}
 .wr .bar i{display:block;height:100%;background:var(--c);border-radius:2px}
-.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;padding:4px;border-radius:14px;background:rgba(255,255,255,.05);border:1px solid var(--line)}
+.seg{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;padding:4px;border-radius:14px;background:rgba(255,255,255,.05);border:1px solid var(--line)}
 .seg button{appearance:none;border:0;border-radius:10px;min-height:36px;background:transparent;color:var(--dim);font-family:var(--display);font-weight:700;font-size:13px;cursor:pointer}
 .seg button[aria-pressed="true"]{background:rgba(255,255,255,.12);color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,.12)}
 .seg button:focus-visible{outline:2px solid var(--violet)}
@@ -196,6 +201,7 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family
 <div id="game">
   <canvas id="cv" aria-label="ჰოკეის მაგიდა"></canvas>
   <div id="backdrop" class="on"></div>
+  <div id="clockEl" hidden>2:00</div>
   <button id="pauseBtn" aria-label="პაუზა" hidden><svg viewBox="0 0 16 16" fill="currentColor"><rect x="3" y="2" width="3.4" height="12" rx="1.2"/><rect x="9.6" y="2" width="3.4" height="12" rx="1.2"/></svg></button>
 
   <!-- MAIN MENU -->
@@ -236,9 +242,9 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family
         <div><p class="eyebrow">VS CPU</p><h2 class="h2">აირჩიე სირთულე</h2></div>
       </div>
       <div class="dgrid" id="diffList" role="radiogroup" aria-label="სირთულე"></div>
-      <div class="seglbl"><span>გოლი გამარჯვებამდე</span></div>
+      <div class="seglbl"><span>გოლი გამარჯვებამდე · ან დრო</span></div>
       <div class="seg" id="segGoals">
-        <button data-goals="5">5</button><button data-goals="7">7</button><button data-goals="10">10</button>
+        <button data-goals="5">5</button><button data-goals="7">7</button><button data-goals="10">10</button><button data-goals="0" aria-label="2 წუთი">2:00</button>
       </div>
       <button class="btn primary center" id="bStart"><span class="tx"><b id="startLbl">დაწყება</b></span></button>
     </div>
@@ -287,7 +293,7 @@ const ASSETS={moon:'data:image/webp;base64,UklGRq5qAABXRUJQVlA4WAoAAAAQAAAA/wEA/
 (() => {
 'use strict';
 const $ = s => document.querySelector(s);
-const gameEl = $('#game'), cv = $('#cv'), pauseBtn = $('#pauseBtn');
+const gameEl = $('#game'), cv = $('#cv'), pauseBtn = $('#pauseBtn'), clockEl = $('#clockEl');
 const ctx = cv.getContext('2d', { alpha:false });
 const TAU = Math.PI*2;
 const clamp = (v,a,b) => v < a ? a : v > b ? b : v;
@@ -319,6 +325,7 @@ const DEMO = Object.assign({}, DIFF.normal, { vmax:200, shot:380, cool:.3, bank:
 const PUCK_MAX = 540, HUMAN_MAX = 720;
 const FRICTION = .26, SPIN_DAMP = 1.1, MAGNUS = .0016, SPIN_MAX = 70;
 const E_MALLET = .9, E_WALL = .86, MU_MALLET = .28, MU_WALL = .16;
+const TIMED_SECONDS = 120;
 const RULE_SECONDS = 7, TABLE_METERS = 1.2, CORNER = 9;
 
 /* ---------- persistence ---------- */
@@ -326,10 +333,10 @@ const KEY = 'neonpuck.v2';
 let saved = {}; try { saved = JSON.parse(localStorage.getItem(KEY)) || JSON.parse(localStorage.getItem('neonpuck.v1')) || {}; } catch(e) {}
 const S = {
   mode:'demo', state:'play', diff: DIFF[saved.diff] ? saved.diff : 'normal',
-  target:[5,7,10].includes(saved.target) ? saved.target : 7,
+  target:[0,5,7,10].includes(saved.target) ? saved.target : 7,
   skin: SKINS[saved.skin] ? saved.skin : 'neon',
   sound: saved.sound !== false, vib: saved.vib !== false, fps: !!saved.fps, stats: saved.stats || {},
-  goalTimer:0, countT:0, countStep:.8, conceder:null, scorer:null, prev:'play', matchT:0
+  timeLeft:120, ot:false, goalTimer:0, countT:0, countStep:.8, conceder:null, scorer:null, prev:'play', matchT:0
 };
 function persist(){ try { localStorage.setItem(KEY, JSON.stringify({skin:S.skin,diff:S.diff,target:S.target,sound:S.sound,vib:S.vib,fps:S.fps,stats:S.stats})); } catch(e) {} }
 
@@ -588,11 +595,12 @@ function layout(){
   tube = 1.25*u; const inset = 1.7*u;
   wl = ox+inset; wr = ox+tw-inset; wt = inset; wb = H-inset;
   L = wl+tube/2; R = wr-tube/2; T = wt+tube/2; B = wb-tube/2;
-  cx = (L+R)/2; mid = (T+B)/2; rm = 8.2*u; rp = 4.2*u; gw = 19.5*u;
+  cx = (L+R)/2; mid = (T+B)/2; rm = 7.5*u; rp = 3.8*u; gw = 19.5*u;
   if (snap) [puck,top,bot].forEach((o,i) => { const s = snap[i]; o.x = L+s.x*(R-L); o.y = T+s.y*(B-T); o.vx = s.vx*u; o.vy = s.vy*u; });
   else { resetPositions(); puck.x = cx; puck.y = mid + 26*u; }
   buildPaths(); buildSprites(); drawStatic();
   pauseBtn.style.left = (R - 7*u) + 'px'; pauseBtn.style.top = mid + 'px';
+  clockEl.style.left = (L + 3.5*u) + 'px'; clockEl.style.top = mid + 'px';
   inited = true; menuDirty = true;
 }
 function resetPositions(){
@@ -948,6 +956,17 @@ function faceoff(m){
   ring = { x:puck.x, y:puck.y, t:0 };
   top.ai.mode = bot.ai.mode = ''; top.ai.t = bot.ai.t = 9;
 }
+// goals mode: first to S.target; timed mode (S.target === 0): only the golden goal in overtime ends it early
+function matchWonBy(m){ return S.target > 0 ? m.score >= S.target : S.ot; }
+function fmtClock(t){ const n = Math.max(0, Math.ceil(t)); return Math.floor(n/60) + ':' + String(n%60).padStart(2,'0'); }
+let clockShown = '';
+function syncClock(){
+  const timed = S.target === 0 && S.mode !== 'demo' && S.state !== 'over';
+  clockEl.hidden = !timed; if (!timed) return;
+  const txt = S.ot ? 'OT' : fmtClock(S.timeLeft);
+  if (txt !== clockShown) { clockShown = txt; clockEl.textContent = txt; }
+  clockEl.classList.toggle('low', !S.ot && S.timeLeft <= 10); clockEl.classList.toggle('ot', S.ot);
+}
 function scoreGoal(scorer){
   puckActive = false; puckVisible = false;
   scorer.score++; scorer.st.shots += (clock - scorer.lastShot > .35) ? 1 : 0; scorer.lastShot = clock;
@@ -957,7 +976,7 @@ function scoreGoal(scorer){
   spawn(cx, gy, 2, 30, 90, 1.4, 1.2, 0, dir, 3);
   if (S.mode !== 'demo') { (scorer === bot ? [0,1] : [2,3]).forEach(q => qFlash[q] = 1); shake = 1; }
   say('GOAL!', scorer === top ? COL.top : COL.bot, 1.35, 15);
-  const winning = S.mode !== 'demo' && scorer.score >= S.target && (S.mode === 'pvp' || scorer === bot);
+  const winning = S.mode !== 'demo' && matchWonBy(scorer) && (S.mode === 'pvp' || scorer === bot);
   S.goalCall = winning && playGoalCall();
   if (!S.goalCall) { if (S.mode === 'cpu') sfx(scorer === bot ? 'good' : 'bad'); else if (S.mode === 'pvp') sfx('good'); }
   if (S.mode !== 'demo') buzz(scorer === bot ? 30 : [20,40,20]);
@@ -965,10 +984,10 @@ function scoreGoal(scorer){
 }
 function afterGoal(){
   const w = S.scorer;
-  if (S.mode !== 'demo' && w.score >= S.target) return endMatch(w);
+  if (S.mode !== 'demo' && matchWonBy(w)) return endMatch(w);
   if (S.mode === 'demo' && w.score >= 7) top.score = bot.score = 0;
   S.state = 'play'; faceoff(S.conceder);
-  if (S.mode !== 'demo' && (top.score === S.target - 1 || bot.score === S.target - 1)) say('MATCH POINT', COL.gold, 1.4, 8);
+  if (S.mode !== 'demo' && S.target > 0 && (top.score === S.target - 1 || bot.score === S.target - 1)) say('MATCH POINT', COL.gold, 1.4, 8);
 }
 function foul(owner){ // 7-second rule: possession passes to the opponent
   const other = owner === top ? bot : top;
@@ -986,7 +1005,7 @@ function startDemo(){
   stopGoalCall();
   S.mode = 'demo'; S.state = 'play';
   top.human = bot.human = false; top.ai.P = DEMO; bot.ai.P = DEMO;
-  top.score = bot.score = 0; ptr.clear(); pauseBtn.hidden = true; banner = null;
+  top.score = bot.score = 0; ptr.clear(); pauseBtn.hidden = true; clockEl.hidden = true; banner = null;
   resetPositions(); faceoff(null); pN = 0; trailN = 0; shake = 0; ring = null;
   for (let q = 0; q < 4; q++) qFlash[q] = 0; top.flash = bot.flash = 0;
   menuDirty = true;
@@ -997,19 +1016,20 @@ function startMatch(mode){
   S.mode = mode; top.human = mode === 'pvp'; bot.human = true;
   top.ai.P = DIFF[S.diff];
   top.score = bot.score = 0; pN = 0; banner = null; ptr.clear(); resetStats();
+  S.timeLeft = TIMED_SECONDS; S.ot = false; clockShown = '';
   startCount(.8);
-  show(null); pauseBtn.hidden = false; wake();
+  show(null); pauseBtn.hidden = false; syncClock(); wake();
 }
 function endMatch(w){
-  S.state = 'over'; puckActive = false; puckVisible = false; pauseBtn.hidden = true; ptr.clear(); top.hasT = bot.hasT = false;
+  S.state = 'over'; puckActive = false; puckVisible = false; pauseBtn.hidden = true; clockEl.hidden = true; ptr.clear(); top.hasT = bot.hasT = false;
   const won = w === bot;
   if (S.mode === 'cpu') {
     const st = S.stats[S.diff] || { p:0, w:0 }; st.p++; if (won) st.w++; S.stats[S.diff] = st; persist();
     $('#oTitle').textContent = won ? 'მოიგე!' : 'წააგე';
-    $('#oSub').textContent = `${DIFF[S.diff].name} · მოგება ${Math.round(st.w/st.p*100)}%`;
+    $('#oSub').textContent = `${S.target === 0 ? '2:00 · ' : ''}${DIFF[S.diff].name} · მოგება ${Math.round(st.w/st.p*100)}%`;
   } else {
     $('#oTitle').textContent = S.skin === 'cosmic' ? (won ? 'მთვარემ მოიგო' : 'მზემ მოიგო') : (won ? 'ნარინჯისფერმა მოიგო' : 'ცისფერმა მოიგო');
-    $('#oSub').textContent = '2 მოთამაშე';
+    $('#oSub').textContent = S.target === 0 ? '2 მოთამაშე · 2:00' : '2 მოთამაშე';
   }
   $('#oScore').innerHTML = scoreHTML(); $('#oWho').innerHTML = whoHTML();
   $('#kSpeed').textContent = Math.round(maxSpeed/tw*TABLE_METERS*3.6);
@@ -1267,6 +1287,15 @@ function frame(now){
       if (S.countT <= 0) { S.state = 'play'; puckActive = true; if (S.mode !== 'demo') { say('GO!', COL.puck, .8, 13); sfx('go'); buzz(15); } }
     }
     if (S.state === 'play') S.matchT += dt;
+    if (S.state === 'play' && S.target === 0 && S.mode !== 'demo' && !S.ot) {
+      S.timeLeft -= dt;
+      if (S.timeLeft <= 0) {
+        S.timeLeft = 0;
+        if (top.score !== bot.score) { say('დრო!', COL.gold, 1.4, 14); sfx('foul'); buzz([30,50,30]); syncClock(); return endMatch(top.score > bot.score ? top : bot); }
+        S.ot = true; say('GOLDEN GOAL', COL.gold, 1.8, 7.5); sfx('go'); buzz(25);
+      }
+      syncClock();
+    }
     if (!top.human) aiThink(top, dt);
     if (!bot.human) aiThink(bot, dt);
     top.sx = top.x; top.sy = top.y; bot.sx = bot.x; bot.sy = bot.y;
