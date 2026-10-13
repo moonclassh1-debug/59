@@ -52,11 +52,11 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family
 #pauseBtn:focus-visible{outline:2px solid var(--violet);outline-offset:3px}
 
 /* screens */
-.screen{position:absolute;inset:0;z-index:5;display:flex;flex-direction:column;align-items:center;justify-content:center;padding-block:28px;padding-inline:16px;overflow-y:auto;touch-action:pan-y;background:none;z-index:6;will-change:opacity}
+.screen{position:absolute;inset:0;z-index:5;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding-block:28px;padding-inline:16px;overflow-y:auto;touch-action:pan-y;background:none;z-index:6;will-change:opacity}
 .panel{will-change:transform}
 #backdrop{position:absolute;inset:0;z-index:5;pointer-events:none;opacity:0;transition:opacity .3s cubic-bezier(.2,.8,.2,1);will-change:opacity;background:radial-gradient(90% 60% at 50% 30%,rgba(60,40,120,.22),transparent 70%),linear-gradient(180deg,rgba(3,4,10,.55),rgba(3,4,10,.88))}
 #backdrop.on{opacity:1}
-.panel{width:100%;max-width:392px;display:flex;flex-direction:column;gap:13px}
+.panel{margin-block:auto;width:100%;max-width:392px;display:flex;flex-direction:column;gap:13px}
 
 /* brand */
 .brand{display:flex;flex-direction:column;align-items:center;gap:2px;margin-bottom:6px;text-align:center}
